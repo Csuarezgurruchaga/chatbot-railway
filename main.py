@@ -4,6 +4,7 @@ from twilio.rest import Client
 from openai import OpenAI
 import os
 from dotenv import load_dotenv
+from fastapi.responses import PlainTextResponse
 
 # ==================== CONFIGURACIÓN ====================
 app = FastAPI()
@@ -67,7 +68,7 @@ async def recibir_mensaje(Body: str = Form(), From: str = Form()):
     )
     
     print(f"🤖 Respondí: {respuesta_ia}")
-    return {"status": "ok"}
+    return PlainTextResponse("", status_code=200)
 
 # ==================== ENDPOINTS EXTRAS ====================
 @app.get("/")
