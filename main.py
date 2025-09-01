@@ -35,7 +35,7 @@ def chatbot_respuesta(mensaje_usuario):
                     Eres profesional pero cercano. Usas emojis ocasionalmente."""
                 },
                 {
-                    "role": "user", 
+                    "role": "user",
                     "content": mensaje_usuario
                 }
             ],
@@ -60,9 +60,9 @@ async def recibir_mensaje(Body: str = Form(), From: str = Form()):
     # 🧠 ChatGPT piensa la respuesta
     respuesta_ia = chatbot_respuesta(Body)
     
-    # 📱 Enviar respuesta por WhatsApp
+    # 📱 Enviar respuesta por WhatsApp 
     twilio_client.messages.create(
-        from_="whatsapp:+15557703726",#"whatsapp:+14155238886",
+        from_="whatsapp:+5491147361881",
         to=From,
         body=respuesta_ia
     )
