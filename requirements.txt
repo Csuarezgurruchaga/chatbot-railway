@@ -4,3 +4,4 @@ python-dotenv
 openai
 pinecone-client
 pypdf2
+jinja2
