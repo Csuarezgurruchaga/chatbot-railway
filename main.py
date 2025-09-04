@@ -32,6 +32,8 @@ class RAGManager:
         self.pc = Pinecone(api_key=os.environ["PINECONE_API_KEY"])
         self.index_name = 'argenfuego-chatbot-knowledge-base'
         self.dimension = 1536  # Dimensión estándar para OpenAI embeddings
+        self.namespace = os.environ.get("PINECONE_NAMESPACE", "default")
+        print(f"🎯 Usando namespace: {self.namespace}")
         self.setup_pinecone_index()
     
     def setup_pinecone_index(self):
@@ -114,7 +116,7 @@ class RAGManager:
         batch_size = 100
         for i in range(0, len(vectors), batch_size):
             batch = vectors[i:i + batch_size]
-            self.index.upsert(vectors=batch)
+            self.index.upsert(vectors=batch, namespace=self.namespace)
         
         print(f"✅ Documento '{doc_id}' agregado con {len(chunks)} fragmentos")
         return True
@@ -131,7 +133,8 @@ class RAGManager:
         results = self.index.query(
             vector=query_embeddings[0],
             top_k=top_k,
-            include_metadata=True
+            include_metadata=True,
+            namespace=self.namespace
         )
         
         # Extraer y combinar el contexto relevante
