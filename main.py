@@ -174,7 +174,7 @@ def chatbot_con_rag(mensaje_usuario):
         contexto = rag_manager.search_relevant_context(mensaje_usuario)
         # 2. Construir el prompt con contexto
         if contexto:
-            system_prompt = SYSTEM_PROMPT
+            system_prompt = SYSTEM_PROMPT.render(contexto_relevante=contexto)
         else:
             system_prompt = """Eres un asistente de WhatsApp amigable y útil.
             Respondes en español, de forma concisa (máximo 3 líneas).
