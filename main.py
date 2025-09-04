@@ -11,8 +11,6 @@ import time
 import PyPDF2
 import io
 from typing import List
-import numpy as np
-import json
 
 # ==================== CONFIGURACIÓN ====================
 app = FastAPI()
