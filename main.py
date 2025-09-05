@@ -146,7 +146,11 @@ class RAGManager:
         relevant_texts = []
         for match in results.matches:
             if match.score > 0.7:  # Solo usar matches con alta similitud
-                relevant_texts.append(match.metadata.get('text', ''))
+                # Intentar ambos campos: 'chunk_text' (del pipeline) y 'text' (formato simple)
+                text_content = match.metadata.get('chunk_text', '') or match.metadata.get('text', '')
+                if text_content:
+                    relevant_texts.append(text_content)
+                    print(f"📄 Match encontrado (score: {match.score:.4f}): {text_content[:100]}...")
         
         return "\n\n".join(relevant_texts)
 
@@ -193,10 +197,12 @@ def chatbot_con_rag(mensaje_usuario):
         # 2. Construir el prompt con contexto
         if contexto:
             system_prompt = SYSTEM_PROMPT.render(contexto_relevante=contexto)
+            print(f"✅ Usando contexto RAG ({len(contexto)} caracteres)")
         else:
             system_prompt = """Eres un asistente de WhatsApp amigable y útil.
             Respondes en español, de forma concisa (máximo 3 líneas).
             Eres profesional pero cercano. Usas emojis ocasionalmente."""
+            print("⚠️ No se encontró contexto relevante, usando prompt genérico")
         
         # 3. Generar respuesta con OpenAI
         response = openai_client.chat.completions.create(
