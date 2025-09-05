@@ -113,6 +113,7 @@ class RAGManager:
             })
         
         # Insertar en Pinecone (en lotes para eficiencia)
+        print(f"💾 Guardando en namespace: '{self.namespace}' - documento: '{doc_id}'")
         batch_size = 100
         for i in range(0, len(vectors), batch_size):
             batch = vectors[i:i + batch_size]
@@ -123,6 +124,8 @@ class RAGManager:
     
     def search_relevant_context(self, query: str, top_k: int = 3) -> str:
         """Busca contexto relevante para una consulta"""
+        print(f"🔍 Buscando en namespace: '{self.namespace}' para query: '{query[:50]}...'")
+        
         # Crear embedding de la consulta
         query_embeddings = self.create_embeddings([query])
         
@@ -136,6 +139,8 @@ class RAGManager:
             include_metadata=True,
             namespace=self.namespace
         )
+        
+        print(f"📊 Encontrados {len(results.matches)} matches en namespace '{self.namespace}'")
         
         # Extraer y combinar el contexto relevante
         relevant_texts = []
@@ -152,7 +157,10 @@ def get_rag_manager():
     """Obtiene la instancia de RAGManager con lazy loading"""
     global rag_manager
     if rag_manager is None:
+        print("🔧 Creando nueva instancia de RAGManager...")
         rag_manager = RAGManager()
+    else:
+        print(f"♻️ Reutilizando instancia existente de RAGManager (namespace: '{rag_manager.namespace}')")
     return rag_manager
 
 # ==================== UTILIDADES PARA ARCHIVOS ====================
