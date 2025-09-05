@@ -145,8 +145,15 @@ class RAGManager:
         
         return "\n\n".join(relevant_texts)
 
-# Instancia global del RAG Manager
-rag_manager = RAGManager()
+# Instancia global del RAG Manager (lazy loading)
+rag_manager = None
+
+def get_rag_manager():
+    """Obtiene la instancia de RAGManager con lazy loading"""
+    global rag_manager
+    if rag_manager is None:
+        rag_manager = RAGManager()
+    return rag_manager
 
 # ==================== UTILIDADES PARA ARCHIVOS ====================
 def extract_text_from_pdf(file_content: bytes) -> str:
@@ -174,7 +181,7 @@ def chatbot_con_rag(mensaje_usuario):
     """Chatbot que usa RAG para respuestas más informadas"""
     try:
         # 1. Buscar contexto relevante en nuestra base de conocimiento
-        contexto = rag_manager.search_relevant_context(mensaje_usuario)
+        contexto = get_rag_manager().search_relevant_context(mensaje_usuario)
         # 2. Construir el prompt con contexto
         if contexto:
             system_prompt = SYSTEM_PROMPT.render(contexto_relevante=contexto)
@@ -244,7 +251,7 @@ async def subir_documento(file: UploadFile = File(...), doc_id: str = Form(...))
             "file_type": file.content_type
         }
         
-        success = rag_manager.add_document(text, doc_id, metadata)
+        success = get_rag_manager().add_document(text, doc_id, metadata)
         
         if success:
             return {
@@ -263,7 +270,7 @@ async def subir_documento(file: UploadFile = File(...), doc_id: str = Form(...))
 async def agregar_texto(texto: str = Form(...), doc_id: str = Form(...)):
     """Endpoint para agregar texto directamente"""
     try:
-        success = rag_manager.add_document(texto, doc_id)
+        success = get_rag_manager().add_document(texto, doc_id)
         
         if success:
             return {
@@ -279,7 +286,7 @@ async def agregar_texto(texto: str = Form(...), doc_id: str = Form(...)):
 async def buscar_contexto(query: str):
     """Endpoint para probar búsquedas en la base de conocimiento"""
     try:
-        contexto = rag_manager.search_relevant_context(query, top_k=5)
+        contexto = get_rag_manager().search_relevant_context(query, top_k=5)
         return {
             "query": query,
             "contexto_encontrado": contexto,
@@ -317,11 +324,11 @@ async def inicio():
 async def estado_rag():
     """Verifica el estado de la base de conocimiento"""
     try:
-        stats = rag_manager.index.describe_index_stats()
+        stats = get_rag_manager().index.describe_index_stats()
         return {
             "indice_activo": True,
             "vectores_almacenados": stats.total_vector_count,
-            "dimensiones": rag_manager.dimension
+            "dimensiones": get_rag_manager().dimension
         }
     except Exception as e:
         return {"error": f"Error verificando estado: {str(e)}"}
