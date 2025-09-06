@@ -4,9 +4,8 @@ class GuardrailsService:
     def __init__(self):
         self.respuestas_rechazo = {
             "tema_fuera_alcance": (
-                "🔥 Soy Eva, la asistente de Argenfuego, y me especializo en temas de seguridad "
-                "contra incendios, matafuegos, instalaciones y habilitaciones. "
-                "¿En qué puedo ayudarte relacionado con estos temas? 😊"
+                "Perdón, no puedo ayudarte con eso, solo me especializo únicamente "
+                "en temas de seguridad contra incendios."
             ),
             "lenguaje_inapropiado": (
                 "Por favor, mantengamos una conversación respetuosa. "
@@ -44,16 +43,34 @@ class GuardrailsService:
     def validar_tema_con_llm(self, mensaje: str) -> dict:
         """Valida si el mensaje está relacionado con seguridad contra incendios usando LLM"""
         try:
-            prompt = f"""Responde SOLO 'SÍ' o 'NO':
-¿Este mensaje está relacionado con seguridad contra incendios, matafuegos, extintores, instalaciones de seguridad, habilitaciones, emergencias, o consultas generales de atención al cliente?
+            prompt = f"""Eres un validador para Argenfuego, empresa especializada en seguridad contra incendios.
 
-Mensaje: "{mensaje}"""
+SERVICIOS DE ARGENFUEGO:
+- Venta de matafuegos/extintores y elementos de protección personal
+- Mantenimiento y recarga de extintores
+- Control anual e inspecciones de sistemas contra incendios
+- Instalación de redes de incendio y sistemas fijos
+- Habilitaciones y certificaciones de seguridad
+- Asesoramiento y capacitación en prevención de incendios
+
+Responde SOLO 'SÍ' si el mensaje está relacionado con:
+- Cualquier consulta sobre nuestros servicios/productos
+- Preguntas técnicas sobre seguridad contra incendios
+- Consultas de ventas, precios, mantenimiento
+- Saludos y conversación básica de atención al cliente
+- Solicitudes de información o asesoramiento
+
+Responde 'NO' solo para temas COMPLETAMENTE ajenos (deportes, política, cocina, etc.)
+
+Mensaje del cliente: "{mensaje}"
+
+Respuesta:"""
             
             response = openai_client.chat.completions.create(
                 model="gpt-3.5-turbo",
                 messages=[{"role": "user", "content": prompt}],
                 max_tokens=5,
-                temperature=0
+                temperature=0.2
             )
             
             respuesta = response.choices[0].message.content.lower().strip()
