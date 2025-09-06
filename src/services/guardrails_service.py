@@ -4,8 +4,8 @@ class GuardrailsService:
     def __init__(self):
         self.respuestas_rechazo = {
             "tema_fuera_alcance": (
-                "Perdón, no puedo ayudarte con eso, solo me especializo únicamente "
-                "en temas de seguridad contra incendios."
+                "Perdon, no puedo ayudarte con eso, me especializo unicamente "
+                "en temas de seguridad contra incendios"
             ),
             "lenguaje_inapropiado": (
                 "Por favor, mantengamos una conversación respetuosa. "
