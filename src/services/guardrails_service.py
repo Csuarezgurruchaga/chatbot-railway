@@ -1,4 +1,10 @@
-from src.config.settings import openai_client
+from src.config.settings import (
+    openai_client, 
+    ENABLE_INPUT_MODERATION, 
+    ENABLE_TOPIC_VALIDATION, 
+    ENABLE_OUTPUT_MODERATION
+)
+import asyncio
 
 class GuardrailsService:
     def __init__(self):
@@ -93,22 +99,35 @@ Respuesta:"""
             return {"es_valido": True}
     
     def validar_input(self, mensaje: str) -> dict:
-        """Valida el input del usuario con OpenAI Moderation + LLM para tema"""
-        # Nivel 1: Contenido inapropiado
-        validacion_contenido = self.validar_contenido_inapropiado(mensaje)
-        if not validacion_contenido["es_valido"]:
-            return validacion_contenido
+        """Valida el input del usuario con configuración dinámica de guardrails"""
+        print(f"🔧 Guardrails config: INPUT_MOD={ENABLE_INPUT_MODERATION}, TOPIC={ENABLE_TOPIC_VALIDATION}")
         
-        # Nivel 2: Validación de tema
-        validacion_tema = self.validar_tema_con_llm(mensaje)
-        if not validacion_tema["es_valido"]:
-            return validacion_tema
+        # Nivel 1: Contenido inapropiado (condicional)
+        if ENABLE_INPUT_MODERATION:
+            validacion_contenido = self.validar_contenido_inapropiado(mensaje)
+            if not validacion_contenido["es_valido"]:
+                return validacion_contenido
+        else:
+            print("⏭️ Saltando OpenAI Moderation (deshabilitado)")
         
-        print("✅ Mensaje aprobado por guardrails híbridos")
+        # Nivel 2: Validación de tema (condicional)
+        if ENABLE_TOPIC_VALIDATION:
+            validacion_tema = self.validar_tema_con_llm(mensaje)
+            if not validacion_tema["es_valido"]:
+                return validacion_tema
+        else:
+            print("⏭️ Saltando validación de tema (deshabilitado)")
+        
+        print("✅ Mensaje aprobado por guardrails configurables")
         return {"es_valido": True}
     
     def validar_output(self, respuesta: str) -> dict:
-        """Valida la respuesta del chatbot con OpenAI Moderation"""
+        """Valida la respuesta del chatbot con configuración dinámica"""
+        if not ENABLE_OUTPUT_MODERATION:
+            print("⏭️ Saltando validación de output (deshabilitado)")
+            return {"es_valido": True, "respuesta": respuesta}
+            
+        print("🔍 Validando output del chatbot...")
         validacion = self.validar_contenido_inapropiado(respuesta)
         
         if not validacion["es_valido"]:
@@ -123,5 +142,20 @@ Respuesta:"""
         
         print("✅ Respuesta del chatbot aprobada")
         return {"es_valido": True, "respuesta": respuesta}
+
+    async def log_conversation_async(self, user_id: str, mensaje: str, respuesta: str, metadata: dict = None):
+        """Log conversaciones de manera async sin impactar latencia"""
+        try:
+            # TODO: Implementar logging real (archivo, base de datos, etc.)
+            log_data = {
+                "timestamp": asyncio.get_event_loop().time(),
+                "user_id": user_id,
+                "input": mensaje,
+                "output": respuesta,
+                "metadata": metadata or {}
+            }
+            print(f"📈 [ASYNC LOG] {user_id}: {mensaje[:30]}... -> {respuesta[:30]}...")
+        except Exception as e:
+            print(f"⚠️ Error en logging async: {e}")
 
 guardrails_service = GuardrailsService()

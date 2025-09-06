@@ -16,3 +16,8 @@ openai_client = OpenAI(
 
 PINECONE_API_KEY = os.environ["PINECONE_API_KEY"]
 PINECONE_NAMESPACE = os.environ.get("PINECONE_NAMESPACE", "default")
+
+# Guardrails configurables
+ENABLE_INPUT_MODERATION = os.environ.get("ENABLE_INPUT_MODERATION", "false").lower() == "true"
+ENABLE_TOPIC_VALIDATION = os.environ.get("ENABLE_TOPIC_VALIDATION", "true").lower() == "true"
+ENABLE_OUTPUT_MODERATION = os.environ.get("ENABLE_OUTPUT_MODERATION", "false").lower() == "true"
