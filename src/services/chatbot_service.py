@@ -1,4 +1,5 @@
 from src.config.settings import openai_client
+from src.services.logging_service import logger
 from src.services.rag_service import get_rag_manager
 from src.services.guardrails_service import guardrails_service
 from src.templates.prompts import SYSTEM_PROMPT, FALLBACK_PROMPT
@@ -23,10 +24,10 @@ class ChatbotService:
             # 3. Construir prompt con contexto
             if contexto:
                 system_prompt = SYSTEM_PROMPT.render(contexto_relevante=contexto)
-                print(f"✅ Usando contexto RAG ({len(contexto)} caracteres)")
+                logger.debug("rag_context_used", context_length=len(contexto))
             else:
                 system_prompt = FALLBACK_PROMPT
-                print("⚠️ No se encontró contexto relevante, usando prompt genérico")
+                logger.debug("rag_context_empty", fallback="generic_prompt")
             
             # 4. Generar respuesta con OpenAI
             response = openai_client.chat.completions.create(
@@ -49,7 +50,7 @@ class ChatbotService:
             return respuesta_ia
             
         except Exception as e:
-            print(f"❌ Error en chatbot: {e}")
+            logger.log_api_failure("chatbot_processing", str(e))
             return "Disculpa, tengo problemas técnicos en este momento 🤖"
 
 chatbot_service = ChatbotService()

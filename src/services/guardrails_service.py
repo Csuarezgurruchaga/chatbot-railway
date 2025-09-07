@@ -4,6 +4,7 @@ from src.config.settings import (
     ENABLE_TOPIC_VALIDATION, 
     ENABLE_OUTPUT_MODERATION
 )
+from src.services.logging_service import logger
 import asyncio
 
 class GuardrailsService:
@@ -30,7 +31,7 @@ class GuardrailsService:
             result = response.results[0]
             
             if result.flagged:
-                print(f"🚫 Contenido inapropiado detectado: {result.categories}")
+                logger.log_guardrail_block(None, "profanity", str([cat for cat, flagged in result.categories if flagged]))
                 return {
                     "es_valido": False,
                     "respuesta_rechazo": self.respuestas_rechazo["lenguaje_inapropiado"],
@@ -38,11 +39,11 @@ class GuardrailsService:
                     "categorias": [cat for cat, flagged in result.categories if flagged]
                 }
             
-            print("✅ Contenido apropiado según OpenAI Moderation")
+            logger.debug("input_moderation_passed", user_id=None)
             return {"es_valido": True}
             
         except Exception as e:
-            print(f"⚠️ Error en OpenAI Moderation: {e}")
+            logger.log_api_failure("openai_moderation", str(e))
             # Fallback: continuar sin bloquear
             return {"es_valido": True}
     
@@ -83,24 +84,26 @@ Respuesta:"""
             es_tema_valido = "sí" in respuesta or "si" in respuesta
             
             if not es_tema_valido:
-                print(f"🚫 Tema fuera de alcance: {mensaje[:50]}...")
+                logger.log_guardrail_block(None, "topic-drift", mensaje[:50] + "...")
                 return {
                     "es_valido": False,
                     "respuesta_rechazo": self.respuestas_rechazo["tema_fuera_alcance"],
                     "razon": "tema_fuera_alcance"
                 }
             
-            print("✅ Tema válido según LLM")
+            logger.debug("topic_validation_passed", query_preview=mensaje[:30] + "...")
             return {"es_valido": True}
             
         except Exception as e:
-            print(f"⚠️ Error en validación de tema: {e}")
+            logger.log_api_failure("topic_validation", str(e))
             # Fallback: permitir el mensaje
             return {"es_valido": True}
     
     def validar_input(self, mensaje: str) -> dict:
         """Valida el input del usuario con configuración dinámica de guardrails"""
-        print(f"🔧 Guardrails config: INPUT_MOD={ENABLE_INPUT_MODERATION}, TOPIC={ENABLE_TOPIC_VALIDATION}")
+        logger.debug("guardrails_config", 
+                    input_moderation=ENABLE_INPUT_MODERATION, 
+                    topic_validation=ENABLE_TOPIC_VALIDATION)
         
         # Nivel 1: Contenido inapropiado (condicional)
         if ENABLE_INPUT_MODERATION:
@@ -108,7 +111,7 @@ Respuesta:"""
             if not validacion_contenido["es_valido"]:
                 return validacion_contenido
         else:
-            print("⏭️ Saltando OpenAI Moderation (deshabilitado)")
+            logger.debug("input_moderation_skipped", reason="disabled")
         
         # Nivel 2: Validación de tema (condicional)
         if ENABLE_TOPIC_VALIDATION:
@@ -116,22 +119,22 @@ Respuesta:"""
             if not validacion_tema["es_valido"]:
                 return validacion_tema
         else:
-            print("⏭️ Saltando validación de tema (deshabilitado)")
+            logger.debug("topic_validation_skipped", reason="disabled")
         
-        print("✅ Mensaje aprobado por guardrails configurables")
+        logger.debug("input_validation_passed", message="guardrails_approved")
         return {"es_valido": True}
     
     def validar_output(self, respuesta: str) -> dict:
         """Valida la respuesta del chatbot con configuración dinámica"""
         if not ENABLE_OUTPUT_MODERATION:
-            print("⏭️ Saltando validación de output (deshabilitado)")
+            logger.debug("output_validation_skipped", reason="disabled")
             return {"es_valido": True, "respuesta": respuesta}
             
-        print("🔍 Validando output del chatbot...")
+        logger.debug("output_validation_started")
         validacion = self.validar_contenido_inapropiado(respuesta)
         
         if not validacion["es_valido"]:
-            print("🚫 Respuesta del chatbot rechazada por contenido inapropiado")
+            logger.warn("output_blocked", reason="inappropriate_content")
             return {
                 "es_valido": False,
                 "respuesta_fallback": (
@@ -140,7 +143,7 @@ Respuesta:"""
                 )
             }
         
-        print("✅ Respuesta del chatbot aprobada")
+        logger.debug("output_validation_passed")
         return {"es_valido": True, "respuesta": respuesta}
 
     async def log_conversation_async(self, user_id: str, mensaje: str, respuesta: str, metadata: dict = None):
@@ -154,8 +157,12 @@ Respuesta:"""
                 "output": respuesta,
                 "metadata": metadata or {}
             }
-            print(f"📈 [ASYNC LOG] {user_id}: {mensaje[:30]}... -> {respuesta[:30]}...")
+            logger.info("conversation_logged", 
+                       user_id=user_id,
+                       input_preview=mensaje[:30] + "...",
+                       output_preview=respuesta[:30] + "...",
+                       metadata=metadata)
         except Exception as e:
-            print(f"⚠️ Error en logging async: {e}")
+            logger.warn("async_logging_failed", error=str(e))
 
 guardrails_service = GuardrailsService()

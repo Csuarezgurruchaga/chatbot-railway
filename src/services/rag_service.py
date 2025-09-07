@@ -2,6 +2,7 @@ from pinecone import Pinecone, ServerlessSpec
 import time
 from typing import List
 from src.config.settings import openai_client, PINECONE_API_KEY, PINECONE_NAMESPACE
+from src.services.logging_service import logger
 
 class RAGManager:
     def __init__(self):
@@ -10,7 +11,7 @@ class RAGManager:
         self.index_name = 'argenfuego-chatbot-knowledge-base'
         self.dimension = 1536
         self.namespace = PINECONE_NAMESPACE
-        print(f"🎯 Usando namespace: {self.namespace}")
+        logger.info("rag_initialized", namespace=self.namespace, index=self.index_name)
         self.setup_pinecone_index()
     
     def setup_pinecone_index(self):
@@ -24,12 +25,12 @@ class RAGManager:
                 metric='cosine', 
                 spec=spec
             )
-            print(f"✅ Índice creado: {self.index_name}")
+            logger.info("pinecone_index_created", index=self.index_name)
         else:
-            print(f"✅ Conectado al índice existente: {self.index_name}")
+            logger.debug("pinecone_index_connected", index=self.index_name)
         
         while not self.pc.describe_index(self.index_name).status.ready:
-            print("⏳ Esperando que el índice esté listo...")
+            logger.debug("waiting_for_index_ready")
             time.sleep(1)
         
         self.index = self.pc.Index(self.index_name)
@@ -43,7 +44,7 @@ class RAGManager:
             )
             return [embedding.embedding for embedding in response.data]
         except Exception as e:
-            print(f"❌ Error creando embeddings: {e}")
+            logger.log_api_failure("openai_embeddings", str(e))
             return []
     
     def chunk_text(self, text: str, chunk_size: int = 500, overlap: int = 50) -> List[str]:
@@ -64,7 +65,7 @@ class RAGManager:
         embeddings = self.create_embeddings(chunks)
         
         if not embeddings:
-            print(f"❌ No se pudieron crear embeddings para {doc_id}")
+            logger.warn("embedding_creation_failed", doc_id=doc_id)
             return False
         
         vectors = []
@@ -82,18 +83,18 @@ class RAGManager:
                 "metadata": vector_metadata
             })
         
-        print(f"💾 Guardando en namespace: '{self.namespace}' - documento: '{doc_id}'")
+        logger.info("document_indexing", namespace=self.namespace, doc_id=doc_id, chunks=len(chunks))
         batch_size = 100
         for i in range(0, len(vectors), batch_size):
             batch = vectors[i:i + batch_size]
             self.index.upsert(vectors=batch, namespace=self.namespace)
         
-        print(f"✅ Documento '{doc_id}' agregado con {len(chunks)} fragmentos")
+        logger.info("document_indexed", doc_id=doc_id, chunks_count=len(chunks))
         return True
     
     def search_relevant_context(self, query: str, top_k: int = 3) -> str:
         """Busca contexto relevante para una consulta"""
-        print(f"🔍 Buscando en namespace: '{self.namespace}' para query: '{query[:50]}...'")
+        logger.debug("rag_search_started", namespace=self.namespace, query_preview=query[:50] + "...")
         
         query_embeddings = self.create_embeddings([query])
         
@@ -107,7 +108,7 @@ class RAGManager:
             namespace=self.namespace
         )
         
-        print(f"📊 Encontrados {len(results.matches)} matches en namespace '{self.namespace}'")
+        logger.debug("rag_search_results", namespace=self.namespace, matches_found=len(results.matches))
         
         relevant_texts = []
         for match in results.matches:
@@ -115,7 +116,7 @@ class RAGManager:
                 text_content = match.metadata.get('chunk_text', '') or match.metadata.get('text', '')
                 if text_content:
                     relevant_texts.append(text_content)
-                    print(f"📄 Match encontrado (score: {match.score:.4f}): {text_content[:100]}...")
+                    logger.debug("rag_match_found", score=round(match.score, 4), content_preview=text_content[:50] + "...")
         
         return "\n\n".join(relevant_texts)
 
@@ -125,8 +126,8 @@ def get_rag_manager():
     """Obtiene la instancia de RAGManager con lazy loading"""
     global rag_manager
     if rag_manager is None:
-        print("🔧 Creando nueva instancia de RAGManager...")
+        logger.info("rag_manager_created", instance="new")
         rag_manager = RAGManager()
     else:
-        print(f"♻️ Reutilizando instancia existente de RAGManager (namespace: '{rag_manager.namespace}')")
+        logger.debug("rag_manager_reused", namespace=rag_manager.namespace)
     return rag_manager

@@ -21,3 +21,8 @@ PINECONE_NAMESPACE = os.environ.get("PINECONE_NAMESPACE", "default")
 ENABLE_INPUT_MODERATION = os.environ.get("ENABLE_INPUT_MODERATION", "false").lower() == "true"
 ENABLE_TOPIC_VALIDATION = os.environ.get("ENABLE_TOPIC_VALIDATION", "true").lower() == "true"
 ENABLE_OUTPUT_MODERATION = os.environ.get("ENABLE_OUTPUT_MODERATION", "false").lower() == "true"
+
+# Logging configurables
+LOG_LEVEL = os.environ.get("LOG_LEVEL", "INFO").upper()
+LOG_FORMAT = os.environ.get("LOG_FORMAT", "JSON").upper()
+LOG_PII_MASKING = os.environ.get("LOG_PII_MASKING", "true").lower() == "true"
