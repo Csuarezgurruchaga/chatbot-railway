@@ -22,22 +22,23 @@ class ChatbotService:
             if not validacion_input["es_valido"]:
                 return validacion_input["respuesta_rechazo"]
             
-            # 2. Obtener conversación existente
+            # 2. Verificar si es primera interacción → Respuesta fija determinista
+            is_first = conversation_memory.is_first_interaction(user_id)
+            if is_first:
+                conversation_memory.mark_interaction_complete(user_id)
+                logger.info("first_interaction_welcome_sent", user_id=user_id)
+                return "Hola, soy Eva, la asistente virtual de Argenfuego 🔥 ¿En qué te puedo ayudar?"
+            
+            # 3. Obtener conversación existente (solo para interacciones posteriores)
             conversation_state = conversation_memory.get_conversation_state(user_id)
             lead_data = conversation_state.get("lead_data", {})
-            
-            # 3. Verificar si es primera interacción
-            is_first = conversation_memory.is_first_interaction(user_id)
             
             # 4. Buscar contexto relevante en RAG
             contexto = get_rag_manager().search_relevant_context(mensaje_usuario)
             
-            # 5. Construir prompt con contexto y estado
+            # 5. Construir prompt con contexto (sin lógica de presentación)
             if contexto:
-                system_prompt = SYSTEM_PROMPT.render(
-                    contexto_relevante=contexto,
-                    es_primera_interaccion=is_first
-                )
+                system_prompt = SYSTEM_PROMPT.render(contexto_relevante=contexto)
                 logger.debug("rag_context_used", context_length=len(contexto))
             else:
                 system_prompt = FALLBACK_PROMPT
@@ -61,16 +62,12 @@ class ChatbotService:
             if not validacion_output["es_valido"]:
                 respuesta_ia = validacion_output["respuesta_fallback"]
             
-            # 8. Marcar que ya no es primera interacción
-            if is_first:
-                conversation_memory.mark_interaction_complete(user_id)
-            
-            # 9. Actualizar información de lead
+            # 8. Actualizar información de lead
             updated_lead_data = self._update_lead_data(
                 mensaje_usuario, respuesta_ia, lead_data, user_id
             )
             
-            # 10. Guardar estado actualizado
+            # 9. Guardar estado actualizado
             new_state = {
                 "lead_data": updated_lead_data,
                 "last_message": mensaje_usuario,
@@ -78,7 +75,7 @@ class ChatbotService:
             }
             conversation_memory.save_conversation_state(user_id, new_state)
             
-            # 11. Verificar si enviar lead
+            # 10. Verificar si enviar lead
             lead_result = self._try_send_lead(updated_lead_data, user_id)
             if lead_result:
                 return lead_result
