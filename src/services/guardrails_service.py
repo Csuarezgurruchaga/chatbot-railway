@@ -31,7 +31,7 @@ class GuardrailsService:
             result = response.results[0]
             
             if result.flagged:
-                logger.log_guardrail_block(None, "profanity", str([cat for cat, flagged in result.categories if flagged]))
+                logger.log_guardrail_block(user_id, "profanity", str([cat for cat, flagged in result.categories if flagged]))
                 return {
                     "es_valido": False,
                     "respuesta_rechazo": self.respuestas_rechazo["lenguaje_inapropiado"],
@@ -47,7 +47,7 @@ class GuardrailsService:
             # Fallback: continuar sin bloquear
             return {"es_valido": True}
     
-    def validar_tema_con_llm(self, mensaje: str) -> dict:
+    def validar_tema_con_llm(self, mensaje: str, user_id: str = None) -> dict:
         """Valida si el mensaje está relacionado con seguridad contra incendios usando LLM"""
         try:
             prompt = f"""Eres un validador para Argenfuego, empresa especializada en seguridad contra incendios.
@@ -91,7 +91,7 @@ Respuesta:"""
             es_tema_valido = "sí" in respuesta or "si" in respuesta
             
             if not es_tema_valido:
-                logger.log_guardrail_block(None, "topic-drift", mensaje[:50] + "...")
+                logger.log_guardrail_block(user_id, "topic-drift", mensaje[:50] + "...")
                 return {
                     "es_valido": False,
                     "respuesta_rechazo": self.respuestas_rechazo["tema_fuera_alcance"],
@@ -106,7 +106,7 @@ Respuesta:"""
             # Fallback: permitir el mensaje
             return {"es_valido": True}
     
-    def validar_input(self, mensaje: str) -> dict:
+    def validar_input(self, mensaje: str, user_id: str = None) -> dict:
         """Valida el input del usuario con configuración dinámica de guardrails"""
         try:
             logger.debug("guardrails_config", 
@@ -131,7 +131,7 @@ Respuesta:"""
             
             # Nivel 2: Validación de tema (condicional)
             if ENABLE_TOPIC_VALIDATION:
-                validacion_tema = self.validar_tema_con_llm(mensaje)
+                validacion_tema = self.validar_tema_con_llm(mensaje, user_id)
                 if not validacion_tema["es_valido"]:
                     # Defensive check: ensure response is not None
                     respuesta_rechazo = validacion_tema.get("respuesta_rechazo")
@@ -153,7 +153,7 @@ Respuesta:"""
             # Fallback: permitir el mensaje pero con logging del error
             return {"es_valido": True}
     
-    def validar_output(self, respuesta: str) -> dict:
+    def validar_output(self, respuesta: str, user_id: str = None) -> dict:
         """Valida la respuesta del chatbot con configuración dinámica"""
         if not ENABLE_OUTPUT_MODERATION:
             logger.debug("output_validation_skipped", reason="disabled")

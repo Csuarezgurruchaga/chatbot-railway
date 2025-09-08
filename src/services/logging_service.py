@@ -36,6 +36,9 @@ class LoggingService:
         """Hash irreversible de user ID para compliance PDPA"""
         if not self.pii_masking:
             return user_id
+        
+        if user_id is None:
+            return "hash_anonymous"
             
         return "hash_" + hashlib.sha256(user_id.encode()).hexdigest()[:8]
     

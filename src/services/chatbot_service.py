@@ -18,7 +18,7 @@ class ChatbotService:
         """Procesa mensaje con memoria, RAG, guardrails y captura de leads"""
         try:
             # 1. Validar input con guardrails
-            validacion_input = guardrails_service.validar_input(mensaje_usuario)
+            validacion_input = guardrails_service.validar_input(mensaje_usuario, user_id)
             if not validacion_input["es_valido"]:
                 # Defensive programming: ensure response is never None
                 respuesta_rechazo = validacion_input.get("respuesta_rechazo")
@@ -67,7 +67,7 @@ class ChatbotService:
                 respuesta_ia = "Disculpa, tuve un problema procesando tu consulta. ¿Podrías reformular tu pregunta sobre seguridad contra incendios? 🔥"
             
             # 7. Validar output con guardrails
-            validacion_output = guardrails_service.validar_output(respuesta_ia)
+            validacion_output = guardrails_service.validar_output(respuesta_ia, user_id)
             if not validacion_output["es_valido"]:
                 fallback_response = validacion_output.get("respuesta_fallback")
                 if fallback_response is None or fallback_response.strip() == "":
