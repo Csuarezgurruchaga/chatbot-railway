@@ -15,8 +15,8 @@ async def recibir_mensaje(Body: str = Form(), From: str = Form()):
     
     logger.info("message_received", user_id=numero, message_preview=Body[:50] + "...")
     
-    # 🧠 ChatGPT + RAG + Guardrails
-    respuesta_ia = chatbot_service.procesar_mensaje(Body)
+    # 🧠 ChatGPT + RAG + Guardrails + LangGraph
+    respuesta_ia = chatbot_service.procesar_mensaje(Body, numero)
     
     # 📱 Enviar respuesta por WhatsApp
     twilio_client.messages.create(
