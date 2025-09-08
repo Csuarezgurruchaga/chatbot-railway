@@ -7,14 +7,15 @@ router = APIRouter()
 @router.post("/test")
 async def probar_chatbot(mensaje: str = Form()):
     """Probar el chatbot con RAG y guardrails sin WhatsApp"""
-    respuesta = chatbot_service.procesar_mensaje(mensaje)
+    # Usar user_id temporal para testing
+    respuesta = chatbot_service.procesar_mensaje(mensaje, "test_user")
     return {"mensaje": mensaje, "respuesta": respuesta}
 
 @router.get("/test-simple")
-async def probar_chatbot_simple(mensaje: str):
-    """Probar el chatbot usando query parameter"""
-    respuesta = chatbot_service.procesar_mensaje(mensaje)
-    return {"mensaje": mensaje, "respuesta": respuesta}
+async def probar_chatbot_simple(mensaje: str, user_id: str = "test_user"):
+    """Probar el chatbot usando query parameter con user_id opcional"""
+    respuesta = chatbot_service.procesar_mensaje(mensaje, user_id)
+    return {"mensaje": mensaje, "respuesta": respuesta, "user_id": user_id}
 
 @router.get("/status")
 async def estado_rag():

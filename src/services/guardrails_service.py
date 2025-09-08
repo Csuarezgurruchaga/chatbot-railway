@@ -24,7 +24,7 @@ class GuardrailsService:
             )
         }
     
-    def validar_contenido_inapropiado(self, texto: str) -> dict:
+    def validar_contenido_inapropiado(self, texto: str, user_id: str = None) -> dict:
         """Usa OpenAI Moderation API para detectar contenido inapropiado"""
         try:
             response = openai_client.moderations.create(input=texto)
@@ -39,13 +39,12 @@ class GuardrailsService:
                     "categorias": [cat for cat, flagged in result.categories if flagged]
                 }
             
-            logger.debug("input_moderation_passed", user_id=None)
+            logger.debug("input_moderation_passed", user_id=user_id)
             return {"es_valido": True}
             
         except Exception as e:
             logger.log_api_failure("openai_moderation", str(e))
-            # Fallback: continuar sin bloquear
-            return {"es_valido": True}
+            raise RuntimeError(f"OpenAI Moderation API failed: {e}")
     
     def validar_tema_con_llm(self, mensaje: str, user_id: str = None) -> dict:
         """Valida si el mensaje está relacionado con seguridad contra incendios usando LLM"""
@@ -103,8 +102,7 @@ Respuesta:"""
             
         except Exception as e:
             logger.log_api_failure("topic_validation", str(e))
-            # Fallback: permitir el mensaje
-            return {"es_valido": True}
+            raise RuntimeError(f"Topic validation failed: {e}")
     
     def validar_input(self, mensaje: str, user_id: str = None) -> dict:
         """Valida el input del usuario con configuración dinámica de guardrails"""
@@ -115,7 +113,7 @@ Respuesta:"""
             
             # Nivel 1: Contenido inapropiado (condicional)
             if ENABLE_INPUT_MODERATION:
-                validacion_contenido = self.validar_contenido_inapropiado(mensaje)
+                validacion_contenido = self.validar_contenido_inapropiado(mensaje, user_id)
                 if not validacion_contenido["es_valido"]:
                     # Defensive check: ensure response is not None
                     respuesta_rechazo = validacion_contenido.get("respuesta_rechazo")
@@ -150,8 +148,7 @@ Respuesta:"""
             
         except Exception as e:
             logger.log_api_failure("guardrails_validation_error", str(e))
-            # Fallback: permitir el mensaje pero con logging del error
-            return {"es_valido": True}
+            raise RuntimeError(f"Guardrails validation failed: {e}")
     
     def validar_output(self, respuesta: str, user_id: str = None) -> dict:
         """Valida la respuesta del chatbot con configuración dinámica"""
@@ -160,7 +157,7 @@ Respuesta:"""
             return {"es_valido": True, "respuesta": respuesta}
             
         logger.debug("output_validation_started")
-        validacion = self.validar_contenido_inapropiado(respuesta)
+        validacion = self.validar_contenido_inapropiado(respuesta, user_id)
         
         if not validacion["es_valido"]:
             logger.warn("output_blocked", reason="inappropriate_content")

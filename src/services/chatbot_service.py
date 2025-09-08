@@ -20,11 +20,11 @@ class ChatbotService:
             # 1. Validar input con guardrails
             validacion_input = guardrails_service.validar_input(mensaje_usuario, user_id)
             if not validacion_input["es_valido"]:
-                # Defensive programming: ensure response is never None
+                # Crash fast: guardrails must provide valid rejection response
                 respuesta_rechazo = validacion_input.get("respuesta_rechazo")
                 if respuesta_rechazo is None or respuesta_rechazo.strip() == "":
                     logger.log_api_failure("guardrails_null_response", "Guardrails returned None/empty response")
-                    respuesta_rechazo = "Perdón, no puedo ayudarte con eso. ¿Hay algo sobre seguridad contra incendios en lo que pueda asistirte? 🔥"
+                    raise ValueError("Guardrails validation returned None/empty rejection response")
                 return respuesta_rechazo
             
             # 2. Verificar si es primera interacción → Respuesta fija determinista
@@ -32,7 +32,7 @@ class ChatbotService:
             if is_first:
                 conversation_memory.mark_interaction_complete(user_id)
                 logger.info("first_interaction_welcome_sent", user_id=user_id)
-                return "Hola, soy Eva, la asistente virtual de Argenfuego 🔥 ¿En qué te puedo ayudar?"
+                return "Hola, soy Eva, la asistente virtual de Argenfuego 🧯 ¿En qué te puedo ayudar?"
             
             # 3. Obtener conversación existente (solo para interacciones posteriores)
             conversation_state = conversation_memory.get_conversation_state(user_id)
@@ -60,20 +60,20 @@ class ChatbotService:
                 temperature=self.temperature
             )
             
-            # Defensive programming: handle None response from OpenAI
+            # Crash fast: OpenAI must return valid content
             respuesta_ia = response.choices[0].message.content
             if respuesta_ia is None or respuesta_ia.strip() == "":
                 logger.log_api_failure("openai_null_response", "OpenAI returned None/empty content")
-                respuesta_ia = "Disculpa, tuve un problema procesando tu consulta. ¿Podrías reformular tu pregunta sobre seguridad contra incendios? 🔥"
+                raise ValueError("OpenAI returned None or empty response")
             
             # 7. Validar output con guardrails
             validacion_output = guardrails_service.validar_output(respuesta_ia, user_id)
             if not validacion_output["es_valido"]:
                 fallback_response = validacion_output.get("respuesta_fallback")
                 if fallback_response is None or fallback_response.strip() == "":
-                    respuesta_ia = "Disculpa, hubo un problema. ¿Puedo ayudarte con algo sobre seguridad contra incendios? 🔥"
-                else:
-                    respuesta_ia = fallback_response
+                    logger.log_api_failure("output_validation_null_fallback", "Output validation returned None/empty fallback")
+                    raise ValueError("Output validation failed to provide valid fallback response")
+                respuesta_ia = fallback_response
             
             # 8. Actualizar información de lead
             updated_lead_data = self._update_lead_data(
@@ -93,10 +93,10 @@ class ChatbotService:
             if lead_result and lead_result.strip() != "":
                 return lead_result
             
-            # Final defensive check: ensure we never return None or empty
+            # Final crash fast check: response must be valid
             if respuesta_ia is None or respuesta_ia.strip() == "":
                 logger.log_api_failure("final_null_response_check", "Response is None/empty at final check")
-                respuesta_ia = "Hola! ¿En qué puedo ayudarte con temas de seguridad contra incendios? 🔥"
+                raise ValueError("Final validation failed: response is None or empty")
             
             return respuesta_ia
             
