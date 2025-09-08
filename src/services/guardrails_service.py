@@ -80,7 +80,14 @@ Respuesta:"""
                 temperature=0.2
             )
             
-            respuesta = response.choices[0].message.content.lower().strip()
+            # Defensive programming: handle None response
+            response_content = response.choices[0].message.content
+            if response_content is None:
+                logger.log_api_failure("topic_validation_null_response", "OpenAI returned None content")
+                # Fallback: permitir el mensaje si hay error
+                return {"es_valido": True}
+            
+            respuesta = response_content.lower().strip()
             es_tema_valido = "sí" in respuesta or "si" in respuesta
             
             if not es_tema_valido:
@@ -101,28 +108,50 @@ Respuesta:"""
     
     def validar_input(self, mensaje: str) -> dict:
         """Valida el input del usuario con configuración dinámica de guardrails"""
-        logger.debug("guardrails_config", 
-                    input_moderation=ENABLE_INPUT_MODERATION, 
-                    topic_validation=ENABLE_TOPIC_VALIDATION)
-        
-        # Nivel 1: Contenido inapropiado (condicional)
-        if ENABLE_INPUT_MODERATION:
-            validacion_contenido = self.validar_contenido_inapropiado(mensaje)
-            if not validacion_contenido["es_valido"]:
-                return validacion_contenido
-        else:
-            logger.debug("input_moderation_skipped", reason="disabled")
-        
-        # Nivel 2: Validación de tema (condicional)
-        if ENABLE_TOPIC_VALIDATION:
-            validacion_tema = self.validar_tema_con_llm(mensaje)
-            if not validacion_tema["es_valido"]:
-                return validacion_tema
-        else:
-            logger.debug("topic_validation_skipped", reason="disabled")
-        
-        logger.debug("input_validation_passed", message="guardrails_approved")
-        return {"es_valido": True}
+        try:
+            logger.debug("guardrails_config", 
+                        input_moderation=ENABLE_INPUT_MODERATION, 
+                        topic_validation=ENABLE_TOPIC_VALIDATION)
+            
+            # Nivel 1: Contenido inapropiado (condicional)
+            if ENABLE_INPUT_MODERATION:
+                validacion_contenido = self.validar_contenido_inapropiado(mensaje)
+                if not validacion_contenido["es_valido"]:
+                    # Defensive check: ensure response is not None
+                    respuesta_rechazo = validacion_contenido.get("respuesta_rechazo")
+                    if respuesta_rechazo is None:
+                        respuesta_rechazo = self.respuestas_rechazo["lenguaje_inapropiado"]
+                    return {
+                        "es_valido": False,
+                        "respuesta_rechazo": respuesta_rechazo,
+                        "razon": validacion_contenido.get("razon", "contenido_inapropiado")
+                    }
+            else:
+                logger.debug("input_moderation_skipped", reason="disabled")
+            
+            # Nivel 2: Validación de tema (condicional)
+            if ENABLE_TOPIC_VALIDATION:
+                validacion_tema = self.validar_tema_con_llm(mensaje)
+                if not validacion_tema["es_valido"]:
+                    # Defensive check: ensure response is not None
+                    respuesta_rechazo = validacion_tema.get("respuesta_rechazo")
+                    if respuesta_rechazo is None:
+                        respuesta_rechazo = self.respuestas_rechazo["tema_fuera_alcance"]
+                    return {
+                        "es_valido": False,
+                        "respuesta_rechazo": respuesta_rechazo,
+                        "razon": validacion_tema.get("razon", "tema_fuera_alcance")
+                    }
+            else:
+                logger.debug("topic_validation_skipped", reason="disabled")
+            
+            logger.debug("input_validation_passed", message="guardrails_approved")
+            return {"es_valido": True}
+            
+        except Exception as e:
+            logger.log_api_failure("guardrails_validation_error", str(e))
+            # Fallback: permitir el mensaje pero con logging del error
+            return {"es_valido": True}
     
     def validar_output(self, respuesta: str) -> dict:
         """Valida la respuesta del chatbot con configuración dinámica"""

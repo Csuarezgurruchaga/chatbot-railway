@@ -20,7 +20,12 @@ class ChatbotService:
             # 1. Validar input con guardrails
             validacion_input = guardrails_service.validar_input(mensaje_usuario)
             if not validacion_input["es_valido"]:
-                return validacion_input["respuesta_rechazo"]
+                # Defensive programming: ensure response is never None
+                respuesta_rechazo = validacion_input.get("respuesta_rechazo")
+                if respuesta_rechazo is None or respuesta_rechazo.strip() == "":
+                    logger.log_api_failure("guardrails_null_response", "Guardrails returned None/empty response")
+                    respuesta_rechazo = "Perdón, no puedo ayudarte con eso. ¿Hay algo sobre seguridad contra incendios en lo que pueda asistirte? 🔥"
+                return respuesta_rechazo
             
             # 2. Verificar si es primera interacción → Respuesta fija determinista
             is_first = conversation_memory.is_first_interaction(user_id)
@@ -55,12 +60,20 @@ class ChatbotService:
                 temperature=self.temperature
             )
             
+            # Defensive programming: handle None response from OpenAI
             respuesta_ia = response.choices[0].message.content
+            if respuesta_ia is None or respuesta_ia.strip() == "":
+                logger.log_api_failure("openai_null_response", "OpenAI returned None/empty content")
+                respuesta_ia = "Disculpa, tuve un problema procesando tu consulta. ¿Podrías reformular tu pregunta sobre seguridad contra incendios? 🔥"
             
             # 7. Validar output con guardrails
             validacion_output = guardrails_service.validar_output(respuesta_ia)
             if not validacion_output["es_valido"]:
-                respuesta_ia = validacion_output["respuesta_fallback"]
+                fallback_response = validacion_output.get("respuesta_fallback")
+                if fallback_response is None or fallback_response.strip() == "":
+                    respuesta_ia = "Disculpa, hubo un problema. ¿Puedo ayudarte con algo sobre seguridad contra incendios? 🔥"
+                else:
+                    respuesta_ia = fallback_response
             
             # 8. Actualizar información de lead
             updated_lead_data = self._update_lead_data(
@@ -77,14 +90,20 @@ class ChatbotService:
             
             # 10. Verificar si enviar lead
             lead_result = self._try_send_lead(updated_lead_data, user_id)
-            if lead_result:
+            if lead_result and lead_result.strip() != "":
                 return lead_result
+            
+            # Final defensive check: ensure we never return None or empty
+            if respuesta_ia is None or respuesta_ia.strip() == "":
+                logger.log_api_failure("final_null_response_check", "Response is None/empty at final check")
+                respuesta_ia = "Hola! ¿En qué puedo ayudarte con temas de seguridad contra incendios? 🔥"
             
             return respuesta_ia
             
         except Exception as e:
             logger.log_api_failure("chatbot_processing", str(e))
-            return "Disculpa, tengo problemas técnicos en este momento 🤖"
+            # Ensure exception handler never returns None
+            return "Disculpa, tengo problemas técnicos en este momento. ¿Puedo ayudarte con algo sobre seguridad contra incendios? 🤖"
     
     def _update_lead_data(self, user_message: str, bot_response: str, 
                          current_lead: dict, user_id: str) -> dict:
