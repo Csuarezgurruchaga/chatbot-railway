@@ -3,9 +3,10 @@ from fastapi.responses import JSONResponse
 from src.services.memory_service import conversation_memory
 from src.services.email_service import email_service
 from src.services.logging_service import logger
-import smtplib
+import sendgrid
 import os
-from email.mime.text import MIMEText
+from datetime import datetime
+from sendgrid.helpers.mail import Mail, Email, To, Content
 
 router = APIRouter()
 
@@ -26,148 +27,149 @@ async def debug_memory():
             "error": str(e)
         }, status_code=500)
 
-@router.get("/debug/smtp")
-async def debug_smtp():
-    """Endpoint para testing conexión SMTP"""
+@router.get("/debug/sendgrid")
+async def debug_sendgrid():
+    """Endpoint para testing conexión SendGrid API"""
     try:
-        smtp_server = os.getenv('EMAIL_HOST', 'smtp.gmail.com')
-        smtp_port = int(os.getenv('EMAIL_PORT', '587'))
-        email_user = os.getenv('EMAIL_USER')
-        email_password = os.getenv('EMAIL_PASS')
-        
-        # Verificar variables de entorno
+        # Verificar variables de entorno SendGrid
+        sendgrid_api_key = os.getenv('SENDGRID_API_KEY')
         env_status = {
-            "EMAIL_HOST": smtp_server,
-            "EMAIL_PORT": smtp_port,
-            "EMAIL_USER": email_user[:10] + "***" if email_user else None,
-            "EMAIL_PASS": "***" if email_password else None,
-            "LEAD_RECIPIENT": os.getenv('LEAD_RECIPIENT')
+            "SENDGRID_API_KEY": sendgrid_api_key[:10] + "***" if sendgrid_api_key else None,
+            "LEAD_RECIPIENT": os.getenv('LEAD_RECIPIENT'),
+            "SENDGRID_FROM_EMAIL": os.getenv('SENDGRID_FROM_EMAIL', 'eva@argenfuego.com'),
+            "SENDGRID_FROM_NAME": os.getenv('SENDGRID_FROM_NAME', 'Eva - Argenfuego')
         }
         
-        if not email_user or not email_password:
+        if not sendgrid_api_key:
             return JSONResponse({
                 "status": "error",
-                "message": "EMAIL_USER or EMAIL_PASS not configured",
+                "message": "SENDGRID_API_KEY not configured",
                 "env_variables": env_status
             }, status_code=400)
         
-        # Test conexión SMTP
+        # Test conexión SendGrid API
         try:
-            logger.info("smtp_connection_test_started", server=smtp_server, port=smtp_port)
+            logger.info("sendgrid_api_test_started", api_key_prefix=sendgrid_api_key[:10])
             
-            with smtplib.SMTP(smtp_server, smtp_port) as server:
-                server.starttls()
-                server.login(email_user, email_password)
-                
-                # Test email
-                test_msg = MIMEText("Test email from Eva chatbot - SMTP working correctly!")
-                test_msg['Subject'] = "🔥 SMTP Test - Eva Chatbot"
-                test_msg['From'] = email_user
-                test_msg['To'] = email_user  # Send to self
-                
-                server.send_message(test_msg)
-                
-            logger.info("smtp_test_successful", recipient=email_user)
+            sg = sendgrid.SendGridAPIClient(api_key=sendgrid_api_key)
+            
+            # Crear email de prueba
+            from_email = Email(email_service.sender_email, email_service.sender_name)
+            to_email = To(email_service.recipient)
+            subject = "🔥 SendGrid API Test - Eva Chatbot"
+            
+            html_content = f"""
+            <html>
+            <body style="font-family: Arial, sans-serif; padding: 20px;">
+                <h2 style="color: #ff6b35;">🔥 SendGrid Test Exitoso</h2>
+                <p>Este email confirma que SendGrid API está funcionando correctamente.</p>
+                <p><strong>Timestamp:</strong> {datetime.now().strftime('%d/%m/%Y %H:%M:%S')}</p>
+                <p><strong>Servicio:</strong> Eva Chatbot - Argenfuego</p>
+                <hr>
+                <p style="font-size: 12px; color: #666;">Email enviado automáticamente desde Railway usando SendGrid API</p>
+            </body>
+            </html>
+            """
+            
+            mail = Mail(
+                from_email=from_email,
+                to_emails=to_email,
+                subject=subject,
+                html_content=html_content
+            )
+            
+            response = sg.send(mail)
+            
+            logger.info("sendgrid_test_successful", 
+                       recipient=email_service.recipient,
+                       status_code=response.status_code)
             
             return JSONResponse({
                 "status": "success",
-                "message": "SMTP connection and email sending successful",
-                "test_email_sent_to": email_user,
+                "message": "SendGrid API connection and email sending successful",
+                "test_email_sent_to": email_service.recipient,
+                "status_code": response.status_code,
                 "env_variables": env_status
             })
             
-        except smtplib.SMTPAuthenticationError as e:
-            logger.log_api_failure("smtp_auth_error", str(e))
+        except sendgrid.exceptions.BadRequestsError as e:
+            logger.log_api_failure("sendgrid_bad_request", str(e))
             return JSONResponse({
                 "status": "error",
-                "error_type": "authentication",
-                "message": "Gmail authentication failed. Check EMAIL_USER and EMAIL_PASS (App Password)",
+                "error_type": "bad_request",
+                "message": "SendGrid API request error. Check API key and email addresses",
                 "details": str(e),
+                "env_variables": env_status
+            }, status_code=400)
+            
+        except sendgrid.exceptions.UnauthorizedError as e:
+            logger.log_api_failure("sendgrid_auth_error", str(e))
+            return JSONResponse({
+                "status": "error", 
+                "error_type": "authentication",
+                "message": "SendGrid API authentication failed. Check SENDGRID_API_KEY",
+                "details": str(e),
+                "suggestion": "Verify API key is correct and has send permissions",
                 "env_variables": env_status
             }, status_code=401)
             
-        except smtplib.SMTPConnectError as e:
-            logger.log_api_failure("smtp_connect_error", str(e))
-            return JSONResponse({
-                "status": "error", 
-                "error_type": "connection",
-                "message": "Cannot connect to Gmail SMTP server. Railway might be blocking SMTP",
-                "details": str(e),
-                "suggestion": "Try SendGrid/Mailgun or contact Railway support",
-                "env_variables": env_status
-            }, status_code=503)
-            
         except Exception as e:
-            logger.log_api_failure("smtp_general_error", str(e))
+            logger.log_api_failure("sendgrid_general_error", str(e))
             return JSONResponse({
                 "status": "error",
                 "error_type": "general",
-                "message": "SMTP test failed",
+                "message": "SendGrid API test failed",
                 "details": str(e),
                 "env_variables": env_status
             }, status_code=500)
             
     except Exception as e:
-        logger.log_api_failure("debug_smtp_endpoint", str(e))
+        logger.log_api_failure("debug_sendgrid_endpoint", str(e))
         return JSONResponse({
             "status": "error",
             "message": "Debug endpoint error",
             "error": str(e)
         }, status_code=500)
 
-@router.get("/debug/smtp/ports")
-async def debug_smtp_ports():
-    """Test diferentes puertos SMTP"""
-    email_user = os.getenv('EMAIL_USER')
-    email_password = os.getenv('EMAIL_PASS')
+@router.get("/debug/sendgrid/template")
+async def debug_sendgrid_template():
+    """Test SendGrid con template personalizado de lead"""
+    sendgrid_api_key = os.getenv('SENDGRID_API_KEY')
     
-    if not email_user or not email_password:
+    if not sendgrid_api_key:
         return JSONResponse({
             "status": "error",
-            "message": "EMAIL_USER or EMAIL_PASS not configured"
+            "message": "SENDGRID_API_KEY not configured"
         }, status_code=400)
     
-    ports_to_test = [
-        {"port": 587, "security": "TLS/STARTTLS"},
-        {"port": 465, "security": "SSL"},
-        {"port": 25, "security": "Plain (usually blocked)"}
-    ]
-    
-    results = []
-    
-    for port_config in ports_to_test:
-        port = port_config["port"]
-        try:
-            if port == 465:
-                # SSL connection
-                with smtplib.SMTP_SSL('smtp.gmail.com', port) as server:
-                    server.login(email_user, email_password)
-                    status = "success"
-            else:
-                # TLS/Plain connection
-                with smtplib.SMTP('smtp.gmail.com', port) as server:
-                    if port == 587:
-                        server.starttls()
-                    server.login(email_user, email_password)
-                    status = "success"
-                    
-            results.append({
-                "port": port,
-                "security": port_config["security"],
-                "status": status,
-                "message": "Connection successful"
-            })
-            
-        except Exception as e:
-            results.append({
-                "port": port,
-                "security": port_config["security"], 
-                "status": "failed",
-                "error": str(e)
-            })
-    
-    return JSONResponse({
-        "status": "completed",
-        "port_test_results": results,
-        "recommendation": "Use the first successful port for EMAIL_PORT"
-    })
+    try:
+        # Simular datos de lead para testing
+        test_lead_data = {
+            "intent": "Necesita extintores para restaurant",
+            "nombre": "Carlos Test",
+            "telefono": "+5491112345678",
+            "email": "carlos.test@restaurant.com",
+            "producto_info": "Restaurant 150m2 con cocina",
+            "ubicacion": "CABA, zona Palermo",
+            "observaciones": "Email de prueba generado desde debug endpoint"
+        }
+        
+        # Usar el mismo tool que usa el chatbot
+        from src.services.email_service import send_lead_email
+        result = send_lead_email.invoke(test_lead_data)
+        
+        return JSONResponse({
+            "status": "success",
+            "message": "Template email sent successfully",
+            "lead_data_used": test_lead_data,
+            "tool_response": result,
+            "sent_to": email_service.recipient
+        })
+        
+    except Exception as e:
+        logger.log_api_failure("debug_sendgrid_template", str(e))
+        return JSONResponse({
+            "status": "error",
+            "message": "Template test failed",
+            "error": str(e)
+        }, status_code=500)
