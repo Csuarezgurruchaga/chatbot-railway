@@ -13,6 +13,7 @@ class ConversationMemoryService:
     
     def is_first_interaction(self, user_id: str) -> bool:
         """Determina si es la primera interacción real del usuario"""
+        # Si no existe el usuario, es primera vez
         if user_id not in self.user_sessions:
             self.user_sessions[user_id] = {
                 'first_interaction': True,
@@ -20,12 +21,17 @@ class ConversationMemoryService:
             }
             logger.debug("first_interaction_detected", user_id=user_id)
             return True
-        return False
+        
+        # Si existe, verificar si sigue siendo primera interacción
+        is_first = self.user_sessions[user_id].get('first_interaction', False)
+        logger.debug("interaction_check", user_id=user_id, is_first=is_first)
+        return is_first
     
     def mark_interaction_complete(self, user_id: str):
         """Marca que el usuario ya tuvo su primera interacción"""
         if user_id in self.user_sessions:
             self.user_sessions[user_id]['first_interaction'] = False
+            logger.debug("first_interaction_completed", user_id=user_id)
     
     def get_conversation_state(self, user_id: str) -> dict:
         """Obtiene el estado de conversación del usuario"""
@@ -53,6 +59,16 @@ class ConversationMemoryService:
             logger.debug("memory_save_success", user_id=user_id)
         except Exception as e:
             logger.debug("memory_save_error", user_id=user_id, error=str(e))
+    
+    def debug_user_sessions(self) -> dict:
+        """Para debugging - devuelve estado actual de sesiones"""
+        return {
+            user_id: {
+                'first_interaction': data['first_interaction'],
+                'timestamp': data['timestamp'].isoformat()
+            }
+            for user_id, data in self.user_sessions.items()
+        }
     
     def _cleanup_expired_sessions(self):
         """Limpia sesiones expiradas de memoria"""

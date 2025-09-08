@@ -1,10 +1,11 @@
 from fastapi import FastAPI
-from src.api import webhook, testing
+from src.api import webhook, testing, debug
 
 app = FastAPI()
 
 app.include_router(webhook.router)
 app.include_router(testing.router)
+app.include_router(debug.router)
 
 if __name__ == "__main__":
     print("🚀 ChatGPT WhatsApp Bot con RAG y Guardrails iniciando...")
